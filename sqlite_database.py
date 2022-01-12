@@ -14,15 +14,19 @@ class TableCon:
         mode. This means transactions are committed as soon as they are
         issued, removing "database is locked" errors.
         """
-        if db[-3:] != ".db":
-            db += ".db"
-        self.con = sql.connect(db, isolation_level = None)
-        self.cur = self.con.cursor()
+        self.con = None
+        self.set_db(db)
         self.table = table
         self.debug = debug
         self.field_map = {}
 
     def open(self, db, table):
+        """
+        Open a connection to a table inside a database file.
+
+        db : str : Filepath of the database file
+        table : str : name of the table
+        """
         if not self.con is None:
             self.close()
 
@@ -30,24 +34,31 @@ class TableCon:
         self.set_table(table)
 
     def close(self):
+        """ Close the database connection """
         if not self.con is None:
             self.con.close()
             self.con = None
             self.cur = None
 
     def commit(self):
+        """
+        Commit all database transactions
+        """
         if not self.con is None:
             self.con.commit()
 
     def set_db(self, db):
+        """ Open connection to the database """
         self.close()
-        self.con = sql.connect(db + ".db")
+        self.con = sql.connect(db, isolation_level = None)
         self.cur = self.con.cursor()
 
     def set_table(self, table):
+        """ Set the default table to query """
         self.table = table
 
     def get_columns(self):
+        """ Return dictionary of column names and type details """
         cols = self.execute("PRAGMA table_info(%s)" % self.table,
                             select = True)
         col_dict = {x[1]: {'order': x[0], 'type': x[2],
@@ -56,6 +67,7 @@ class TableCon:
         return col_dict
 
     def get_tables(self):
+        """ Return list of tables in connected database """
         return self.execute("SELECT name FROM sqlite_master "
                             "WHERE type='table'", select = True)
 
@@ -67,6 +79,8 @@ class TableCon:
         self.field_map = field_map
 
     def map_field_names(self, fields):
+        """ Update a single field name or dict/list of field names based on
+        the field_map """
         if isinstance(fields, dict):
             mapped_dict = {}
             for k, v in fields.items():
@@ -115,9 +129,8 @@ class TableCon:
             return value
 
     def execute(self, query, select = False):
-        # if self.table is None and not "CREATE TABLE" in query:
-        #     raise AttributeError("No table defined")
-
+        """ Execute a arbitrary SQL script. If the query returns rows, set
+        select = True. """
         if self.debug: print(query)
 
         cursor = self.cur.execute(query)
@@ -128,11 +141,14 @@ class TableCon:
             self.commit()
 
     def select(self, query):
+        """ Return rows from an arbitrary SQL query """
         return self.execute(query, select = True)
 
     def filter(self, filters, return_cols, rc = "columns", boolean = "AND",
                distinct = True):
         """
+        Return the results of a generated SQL query
+
         filters is a dictionary of column names and values to filter with.
         return_cols is a list of column names to return
         """
@@ -187,6 +203,8 @@ class TableCon:
                              " of 'rows' or 'columns'.")
 
 class MultiConnection:
+    """ Light class to handle connecting to multiple tables simultaneously
+    within the same database """
     def __init__(self, db, tables = None, debug = False):
         self.db = db
         if tables is None:
