@@ -6,6 +6,8 @@ Created on Tue Sep 14 22:29:57 2021
 """
 
 import sqlite3 as sql
+import warnings
+from datetime import datetime
 
 class TableCon:
     def __init__(self, db, table = None, debug = False, isolation_level = None,
@@ -44,9 +46,7 @@ class TableCon:
             self.cur = None
 
     def commit(self):
-        """
-        Commit all database transactions
-        """
+        """ Commit all database transactions """
         if not self.con is None:
             self.con.commit()
 
@@ -70,16 +70,22 @@ class TableCon:
                     for x in cols}
         return col_dict
 
+    def get_datatypes(self):
+        """ Return dictionary of default datatypes of columns """
+        raise NotImplementedError
+
+    def getdate():
+        """ Return string representation of current datetime """
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
     def get_tables(self):
         """ Return list of tables in connected database """
         return self.execute("SELECT name FROM sqlite_master "
                             "WHERE type='table'", select = True)
 
     def define_field_map(self, field_map):
-        """
-        Define a map from field names used in write_values to those in the
-        specified table. Persistent across changes in table or database.
-        """
+        """ Define a map from field names used in write_values to those in the
+        specified table. Persistent across changes in table or database. """
         self.field_map = field_map
 
     def map_field_names(self, fields):
@@ -98,12 +104,51 @@ class TableCon:
             return (self.field_map[fields] if fields in self.field_map
                     else fields)
 
+    def insert(self, *args, **kwargs):
+        """ Insert values into the table based on either column position or
+        field names """
+        if len(args) > 0 and len(kwargs) > 0:
+            raise ValueError("Field map cannot be defined by both order and "
+                             "name")
+        if len(kwargs) > 0:
+            query = self._query_insert_kwargs(**kwargs)
+        else:
+            query = self._query_insert_args(*args)
+
+        self.execute(query, select = False)
+
+    def _query_insert_args(self, *args):
+        sql_val = "INSERT INTO %s VALUES(" % self.table
+        for v in args:
+            v = self._sanitise(v)
+            sql_val += self._quote(v) + ","
+
+        sql_val = sql_val[:-1]
+
+        query = sql_val + ")"
+        return query
+
+    def _query_insert_kwargs(self, **kwargs):
+        kwargs = self.map_field_names(kwargs)
+        sql_col = "INSERT INTO %s (" % self.table
+        sql_val = "VALUES ("
+        for k, v in kwargs.items():
+            v = self._sanitise(v)
+            sql_col += self._bracket(k) + ","
+            sql_val += self._quote(v) + ","
+
+        sql_col = sql_col[:-1]
+        sql_val = sql_val[:-1]
+
+        query = sql_col + ") " + sql_val + ")"
+        return query
+
     def add_row(self, **kwargs):
-        """
-        Given either a dictionary of field names mapped to field values, or
+        """ Given either a dictionary of field names mapped to field values, or
         field names as keywords with values field values, build the INSERT INTO
-        SQL string.
-        """
+        SQL string. """
+        warnings.warn("deprecated", DeprecationWarning)
+
         kwargs = self.map_field_names(kwargs)
         sql_col = "INSERT INTO %s (" % self.table
         sql_val = "VALUES ("
@@ -206,6 +251,7 @@ class TableCon:
             raise ValueError("Invalid shape specified. rc must be one"
                              " of 'rows' or 'columns'.")
 
+
 class MultiConnection:
     """ Light class to handle connecting to multiple tables simultaneously
     within the same database """
@@ -217,9 +263,18 @@ class MultiConnection:
         elif not isinstance(tables, list):
             tables = [tables]
 
+        self._tables = tables
+
         for table in tables:
             self.__dict__[table] = TableCon(
                 db = db, table = table, debug = debug)
+
+    def getdate(self):
+        """ Return string representation of current datetime """
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    def get_tables(self):
+        return self._tables
 
 
 if __name__ == "__main__":
