@@ -8,12 +8,15 @@ Created on Tue Sep 14 22:29:57 2021
 import sqlite3 as sql
 
 class TableCon:
-    def __init__(self, db, table = None, debug = False):
+    def __init__(self, db, table = None, debug = False, isolation_level = None,
+                 **kwargs):
         """
         isolation_level = None causes the database to operate in autocommit
         mode. This means transactions are committed as soon as they are
         issued, removing "database is locked" errors.
         """
+        self._connection_kwargs = kwargs
+        self._connection_kwargs["isolation_level"] = isolation_level
         self.con = None
         self.set_db(db)
         self.table = table
@@ -24,7 +27,7 @@ class TableCon:
         """
         Open a connection to a table inside a database file.
 
-        db : str : Filepath of the database file
+        db : str : Path to the database file
         table : str : name of the table
         """
         if not self.con is None:
@@ -50,7 +53,8 @@ class TableCon:
     def set_db(self, db):
         """ Open connection to the database """
         self.close()
-        self.con = sql.connect(db, isolation_level = None)
+        self.db = db
+        self.con = sql.connect(db, **self._connection_kwargs)
         self.cur = self.con.cursor()
 
     def set_table(self, table):
