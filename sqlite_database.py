@@ -25,7 +25,7 @@ class TableCon:
         self.debug = debug
         self.field_map = {}
 
-    def open(self, db, table):
+    def open(self, db = None, table = None):
         """
         Open a connection to a table inside a database file.
 
@@ -34,6 +34,9 @@ class TableCon:
         """
         if not self.con is None:
             self.close()
+
+        if db is None: db = self.db
+        if table is None: table = self.table
 
         self.set_db(db)
         self.set_table(table)
@@ -74,7 +77,7 @@ class TableCon:
         """ Return dictionary of default datatypes of columns """
         raise NotImplementedError
 
-    def getdate():
+    def getdate(self):
         """ Return string representation of current datetime """
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
@@ -234,6 +237,16 @@ class TableCon:
         query = query.replace("[*]", "*")
         results = self.execute(query, select = True)
 
+        # replace * with list of all columns in table
+        return_cols_flat = return_cols_map[:]
+        return_cols = []
+        for i, col in enumerate(return_cols_flat):
+            if col == "*":
+                return_cols += list(self.get_columns().keys())
+            else:
+                return_cols.append(col)
+
+
         if rc == "columns":
             # pivot each list in results to correspond to one column rather
             # than one row
@@ -247,6 +260,9 @@ class TableCon:
                         for i in range(len(return_cols))}
         elif rc == "rows":
             return [list(row) for row in results]
+        elif rc == "rowdict":
+            return [{return_cols[i]: row[i] for i in range(len(return_cols))}
+                     for row in results]
         else:
             raise ValueError("Invalid shape specified. rc must be one"
                              " of 'rows' or 'columns'.")
@@ -264,10 +280,12 @@ class MultiConnection:
             tables = [tables]
 
         self._tables = tables
+        self.connections = {}
 
         for table in tables:
-            self.__dict__[table] = TableCon(
-                db = db, table = table, debug = debug)
+            tcon = TableCon(db = db, table = table, debug = debug)
+            self.__dict__[table] = tcon
+            self.connections[table] = tcon
 
     def getdate(self):
         """ Return string representation of current datetime """
@@ -276,9 +294,13 @@ class MultiConnection:
     def get_tables(self):
         return self._tables
 
+    def close(self):
+        for connection in self.connections.values():
+            connection.close()
+
 
 if __name__ == "__main__":
-    renames = TableCon(".\sqlite_db\insight", "renames", debug = True)
+    renames = TableCon(".\sqlite_db\insight.db", "renames", debug = True)
     renames.define_field_map({"Original name": "original_name", "#": "number"})
 
     print(renames.filter(filters = {'Composer': 'Beethoven, Ludwig Van'},
