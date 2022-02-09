@@ -229,6 +229,8 @@ class TableCon:
                         query += "[%s] = '%s' %s " % (k, v, boolean)
                 elif isinstance(vs, int) or isinstance(vs, float):
                     query += "[%s] = %s %s " % (k, vs, boolean)
+                elif vs is None:
+                    query += "[%s] IS NULL %s " % (k, boolean)
                 else:
                     raise ValueError("Unsupported value type in key %s" % k)
 
@@ -299,12 +301,12 @@ class MultiConnection:
             connection.close()
 
 
-if __name__ == "__main__":
-    renames = TableCon(".\sqlite_db\insight.db", "renames", debug = True)
-    renames.define_field_map({"Original name": "original_name", "#": "number"})
+# if __name__ == "__main__":
+#     renames = TableCon(".\sqlite_db\insight.db", "renames", debug = True)
+#     renames.define_field_map({"Original name": "original_name", "#": "number"})
 
-    print(renames.filter(filters = {'Composer': 'Beethoven, Ludwig Van'},
-                         return_cols = ['composer', 'album'],
-                         boolean = "AND",
-                         rc = "columns"))
-    renames.close()
+#     print(renames.filter(filters = {'Composer': 'Beethoven, Ludwig Van'},
+#                          return_cols = ['composer', 'album'],
+#                          boolean = "AND",
+#                          rc = "columns"))
+#     renames.close()
