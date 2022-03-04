@@ -196,27 +196,29 @@ class TableCon:
         """ Return rows from an arbitrary SQL query """
         return self.execute(query, select = True)
 
-    def filter(self, filters, return_cols, rc = "columns", boolean = "AND",
-               distinct = True):
-        """
-        Return the results of a generated SQL query
+    def update(self, filters, **kwargs):
+        """ Update all rows returned by applying the filters based on a
+        dictionary of column names and values """
+        query = (self._get_update(**kwargs) + " " +
+                 self._get_where(filters, boolean = "AND"))
+        self.execute(query)
 
-        filters is a dictionary of column names and values to filter with.
-        return_cols is a list of column names to return
-        """
-        if isinstance(return_cols, str):
-            return_cols = [return_cols]
+    def _get_update(self, **kwargs):
+        """ Get UPDATE SET clause of query from dictionary of column names and
+        values """
+        kwargs = self.map_field_names(kwargs)
+        query = "UPDATE %s SET " % self.table
+        sets = ["[%s] = '%s'" % (col, self._sanitise(val))
+                for col, val in kwargs.items()]
+        query += ", ".join(sets)
+        return query
 
-        filters_map = self.map_field_names(filters)
-        return_cols_map = self.map_field_names(return_cols)
-
-        query = "SELECT"
-        if distinct:
-            query += " DISTINCT "
-        query += "[" + "], [".join(return_cols_map) + "] "
-        query += "FROM %s " % self.table
-        if not filters_map is None and filters_map != {}:
-            query += "WHERE "
+    def _get_where(self, filters, boolean = "AND"):
+        """ Get WHERE clause of query from dictionary of column name and value
+        pairs """
+        if not filters is None and filters != {}:
+            filters_map = self.map_field_names(filters)
+            query = "WHERE "
             for i, kv in enumerate(filters_map.items()):
                 k = kv[0]
                 vs = kv[1]
@@ -233,9 +235,30 @@ class TableCon:
                     query += "[%s] IS NULL %s " % (k, boolean)
                 else:
                     raise ValueError("Unsupported value type in key %s" % k)
-
             #remove final boolean keyword
             query = query.strip()[:(-1*len(boolean))]
+        return query
+
+    def filter(self, filters, return_cols, rc = "columns", boolean = "AND",
+               distinct = True):
+        """
+        Return the results of a generated SQL query
+
+        filters is a dictionary of column names and values to filter with.
+        return_cols is a list of column names to return
+        """
+        if isinstance(return_cols, str):
+            return_cols = [return_cols]
+
+        return_cols_map = self.map_field_names(return_cols)
+
+        query = "SELECT"
+        if distinct:
+            query += " DISTINCT "
+        query += "[" + "], [".join(return_cols_map) + "] "
+        query += "FROM %s " % self.table
+        query += self._get_where(filters, boolean)
+
         query = query.replace("[*]", "*")
         results = self.execute(query, select = True)
 
@@ -247,7 +270,6 @@ class TableCon:
                 return_cols += list(self.get_columns().keys())
             else:
                 return_cols.append(col)
-
 
         if rc == "columns":
             # pivot each list in results to correspond to one column rather
@@ -267,7 +289,7 @@ class TableCon:
                      for row in results]
         else:
             raise ValueError("Invalid shape specified. rc must be one"
-                             " of 'rows' or 'columns'.")
+                             " of 'rows', 'columns', or 'rowdict'.")
 
 
 class MultiConnection:
