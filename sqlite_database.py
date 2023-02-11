@@ -216,6 +216,7 @@ class TableCon:
     def _get_where(self, filters, boolean = "AND"):
         """ Get WHERE clause of query from dictionary of column name and value
         pairs """
+        query = ""
         if not filters is None and filters != {}:
             filters_map = self.map_field_names(filters)
             query = "WHERE "
@@ -240,7 +241,7 @@ class TableCon:
         return query
 
     def filter(self, filters, return_cols, rc = "columns", boolean = "AND",
-               distinct = True):
+               distinct = True, case_insensitive = True):
         """
         Return the results of a generated SQL query
 
@@ -258,6 +259,10 @@ class TableCon:
         query += "[" + "], [".join(return_cols_map) + "] "
         query += "FROM %s " % self.table
         query += self._get_where(filters, boolean)
+        if case_insensitive:
+            # COLLATE NOCASE doesn't work without a WHERE for some reason
+            if len(filters) == 0: query += "WHERE TRUE"
+            query += " COLLATE NOCASE "
 
         query = query.replace("[*]", "*")
         results = self.execute(query, select = True)
